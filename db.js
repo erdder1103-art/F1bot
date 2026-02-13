@@ -1,4 +1,4 @@
-const Database = require("better-sqlite3");
+import Database from "better-sqlite3";
 
 const db = new Database("bot.db");
 
@@ -11,12 +11,10 @@ db.exec(`
   );
 `);
 
-function insertLog(action, message) {
+export function insertLog(action, message) {
   const stmt = db.prepare(`
     INSERT INTO logs (timestamp, action, message)
     VALUES (?, ?, ?)
   `);
   stmt.run(new Date().toISOString(), action, message);
 }
-
-module.exports = { db, insertLog };
