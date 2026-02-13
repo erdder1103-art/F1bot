@@ -19,7 +19,7 @@ const URL_GROUP = "https://t.me/livebigbrother";
 const URL_SUPPORT = "https://t.me/F1top_bro";
 
 function nowStr() {
-  return dayjs().utcOffset(8).format("YYYY/MM/DD HH:mm");
+  return dayjs().add(8, "hour").format("YYYY/MM/DD HH:mm");
 }
 
 // ====== 寫入佇列 ======
@@ -151,4 +151,5 @@ console.log("Bot is running...");
     console.error("GAS TEST failed:", err);
   }
 })();
+
 
