@@ -1,4 +1,5 @@
 import { Bot, InlineKeyboard } from "grammy";
+import { insertLog } from "./db.js";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 if (!BOT_TOKEN) throw new Error("Missing BOT_TOKEN");
@@ -14,8 +15,8 @@ const bot = new Bot(BOT_TOKEN);
 // ====== 你的連結設定 ======
 const URL_REGISTER = "https://s.f1.top/r?p=h2pEYZ5DDuYq";
 const URL_CHANNEL = "https://t.me/livebigbrother1"; // 大師兄頻道
-const URL_GROUP = "https://t.me/livebigbrother";    // 大師兄群組
-const URL_SUPPORT = "https://t.me/F1top_bro";       // 小編/客服
+const URL_GROUP = "https://t.me/livebigbrother"; // 大師兄群組
+const URL_SUPPORT = "https://t.me/F1top_bro"; // 小編/客服
 
 // ✅ 固定用台北時間（不靠 dayjs，不會再壞）
 function nowStr() {
@@ -40,6 +41,15 @@ function enqueueWrite(fn) {
   return writeQueue;
 }
 
+// 🧠 安全寫 DB：避免 db 出錯害 bot 掛掉
+function safeLog(action, message) {
+  try {
+    insertLog(action, String(message ?? ""));
+  } catch (e) {
+    console.error("SQLite log failed:", e?.message || e);
+  }
+}
+
 // ✅ 只收集基本資訊：開始互動時間、最後互動時間、TGID、TG帳號、TG名稱
 async function upsertUserBasic(ctx) {
   return enqueueWrite(async () => {
@@ -58,6 +68,9 @@ async function upsertUserBasic(ctx) {
         name,
       };
 
+      // SQLite 本地 log（穩定）
+      safeLog("USER_UPSERT", JSON.stringify(payload));
+
       const res = await fetch(GAS_WEBAPP_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,9 +80,14 @@ async function upsertUserBasic(ctx) {
       if (!res.ok) {
         const t = await res.text().catch(() => "");
         console.error("GAS log failed:", res.status, t);
+
+        safeLog("GAS_FAIL", `status=${res.status} body=${t}`);
+      } else {
+        safeLog("GAS_OK", `tgId=${tgId}`);
       }
     } catch (e) {
       console.error("GAS log error:", e?.message || e);
+      safeLog("GAS_ERROR", e?.message || String(e));
     }
   });
 }
@@ -154,6 +172,7 @@ function claimFormText() {
 async function testGAS() {
   try {
     console.log("Testing GAS connection...");
+
     const payload = {
       secret: GAS_SECRET,
       now: nowStr(),
@@ -161,33 +180,45 @@ async function testGAS() {
       username: "@system_test",
       name: "SYSTEM TEST",
     };
+
     const res = await fetch(GAS_WEBAPP_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
     const txt = await res.text().catch(() => "");
     console.log("GAS TEST status:", res.status);
     console.log("GAS TEST response:", txt);
+
+    safeLog("GAS_TEST", `status=${res.status} body=${txt}`);
   } catch (e) {
     console.error("GAS TEST failed:", e?.message || e);
+    safeLog("GAS_TEST_FAIL", e?.message || String(e));
   }
 }
 
 // /start
 bot.command("start", async (ctx) => {
+  safeLog("CMD_START", `tgId=${ctx.from?.id || ""}`);
+
   await upsertUserBasic(ctx);
   await ctx.reply(startIntroText(), { reply_markup: mainMenu() });
+
+  safeLog("REPLY_START", `tgId=${ctx.from?.id || ""}`);
 });
 
 // 任何訊息都更新最後互動時間
 bot.on("message", async (ctx) => {
+  safeLog("MESSAGE", `tgId=${ctx.from?.id || ""}`);
   await upsertUserBasic(ctx);
 });
 
 // 活動內容
 bot.callbackQuery("menu_promo", async (ctx) => {
   await ctx.answerCallbackQuery();
+  safeLog("CLICK_PROMO", `tgId=${ctx.from?.id || ""}`);
+
   await upsertUserBasic(ctx);
   await ctx.reply(promoText(), { reply_markup: mainMenu() });
 });
@@ -195,12 +226,24 @@ bot.callbackQuery("menu_promo", async (ctx) => {
 // 領取申請表單
 bot.callbackQuery("menu_claim_form", async (ctx) => {
   await ctx.answerCallbackQuery();
+  safeLog("CLICK_FORM", `tgId=${ctx.from?.id || ""}`);
+
   await upsertUserBasic(ctx);
   await ctx.reply(claimFormText(), { reply_markup: mainMenu() });
 });
 
-bot.catch((err) => console.error(err));
+// 重大錯誤捕捉
+bot.catch((err) => {
+  console.error("BOT ERROR:", err);
+  safeLog("BOT_ERROR", err?.message || String(err));
+});
+
+// 啟動流程
+safeLog("SYSTEM", "Booting bot...");
 
 await testGAS();
+
+safeLog("SYSTEM", "Bot started");
+
 bot.start();
 console.log("Bot is running...");
