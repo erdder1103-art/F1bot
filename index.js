@@ -80,7 +80,6 @@ async function upsertUserBasic(ctx) {
       if (!res.ok) {
         const t = await res.text().catch(() => "");
         console.error("GAS log failed:", res.status, t);
-
         safeLog("GAS_FAIL", `status=${res.status} body=${t}`);
       } else {
         safeLog("GAS_OK", `tgId=${tgId}`);
@@ -93,6 +92,8 @@ async function upsertUserBasic(ctx) {
 }
 
 // ====== 主選單（保持原本跳轉 .url）======
+// ⚠️ 小編/客服 改成 callback，才能記錄「被點擊」
+// 點擊後由 bot 回傳一個「客服連結」讓使用者點
 function mainMenu() {
   return new InlineKeyboard()
     .url("✅ 註冊帳戶", URL_REGISTER)
@@ -105,7 +106,7 @@ function mainMenu() {
     .row()
     .text("📝 領取申請表單", "menu_claim_form")
     .row()
-    .url("👨‍💻 小編/客服", URL_SUPPORT);
+    .text("👨‍💻 小編/客服", "menu_support");
 }
 
 // ====== 文案（你目前最終版）======
@@ -153,6 +154,7 @@ function promoText() {
   );
 }
 
+// ✅ 你要的新表單內容（含錢包綁定那題）
 function claimFormText() {
   return (
     `📝【領取申請表單】（請複製填寫後回傳小編）\n\n` +
@@ -161,7 +163,9 @@ function claimFormText() {
     `2) 是否玩過存 USDT 的平台？\n` +
     `   請填平台名稱（可加快審核），沒有請填「無」\n\n` +
     `3) 我的會員帳號：\n\n` +
-    `4) 是否知曉體驗金規則？\n` +
+    `4) 帳戶是否已完成錢包綁定？\n` +
+    `   [已綁定 / 未綁定]\n\n` +
+    `5) 是否知曉體驗金規則？\n` +
     `   請回答「知道」或「不知道」\n\n` +
     `✅ 填寫完成後：\n` +
     `請點「小編/客服」→ 貼上以上內容送出即可。`
@@ -230,6 +234,18 @@ bot.callbackQuery("menu_claim_form", async (ctx) => {
 
   await upsertUserBasic(ctx);
   await ctx.reply(claimFormText(), { reply_markup: mainMenu() });
+});
+
+// ✅ 小編/客服（可以記錄「有沒有點過」）
+bot.callbackQuery("menu_support", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  safeLog("CLICK_SUPPORT", `tgId=${ctx.from?.id || ""}`);
+
+  await upsertUserBasic(ctx);
+
+  // 回傳一個可點的客服連結（這樣你既能記錄點擊，又能導流）
+  const kb = new InlineKeyboard().url("👨‍💻 前往小編/客服", URL_SUPPORT);
+  await ctx.reply("已為你打開客服入口，請點下面按鈕聯繫小編 👇", { reply_markup: kb });
 });
 
 // 重大錯誤捕捉
