@@ -1,10 +1,12 @@
 import { Bot, InlineKeyboard } from "grammy";
 import { insertLog } from "./db.js";
+
+// ====== 版本號（每次要排查就改這行）======
+const APP_VERSION = "2026-02-14-v3";
+
+// 這兩行一定要放在 APP_VERSION 宣告後面
 console.log("=== BOOT FILE index.js ===", new Date().toISOString());
 console.log("=== APP_VERSION ===", APP_VERSION);
-
-// ====== 版本號（你每次要排查就改這行）======
-const APP_VERSION = "2026-02-14-v3";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 if (!BOT_TOKEN) throw new Error("Missing BOT_TOKEN");
@@ -23,6 +25,7 @@ const URL_CHANNEL = "https://t.me/livebigbrother1"; // 大師兄頻道
 const URL_GROUP = "https://t.me/livebigbrother"; // 大師兄群組
 const URL_SUPPORT = "https://t.me/F1top_bro"; // 小編/客服
 
+// ✅ 固定用台北時間（不靠 dayjs）
 function nowStr() {
   const dtf = new Intl.DateTimeFormat("zh-TW", {
     timeZone: "Asia/Taipei",
@@ -43,12 +46,12 @@ function enqueueWrite(fn) {
   return writeQueue;
 }
 
-// 安全寫 DB：避免 db 出錯害 bot 掛掉
+// 🧠 安全寫 log：避免 log 出錯害 bot 掛掉
 function safeLog(action, message) {
   try {
     insertLog(action, String(message ?? ""));
   } catch (e) {
-    console.error("SQLite log failed:", e?.message || e);
+    console.error("Log failed:", e?.message || e);
   }
 }
 
@@ -68,9 +71,10 @@ async function upsertUserBasic(ctx) {
         tgId,
         username,
         name,
+        appVersion: APP_VERSION,
       };
 
-      safeLog("USER_UPSERT", `[${APP_VERSION}] ` + JSON.stringify(payload));
+      safeLog("USER_UPSERT", JSON.stringify(payload));
 
       const res = await fetch(GAS_WEBAPP_URL, {
         method: "POST",
@@ -81,18 +85,18 @@ async function upsertUserBasic(ctx) {
       if (!res.ok) {
         const t = await res.text().catch(() => "");
         console.error("GAS log failed:", res.status, t);
-        safeLog("GAS_FAIL", `[${APP_VERSION}] status=${res.status} body=${t}`);
+        safeLog("GAS_FAIL", `status=${res.status} body=${t}`);
       } else {
-        safeLog("GAS_OK", `[${APP_VERSION}] tgId=${tgId}`);
+        safeLog("GAS_OK", `tgId=${tgId}`);
       }
     } catch (e) {
       console.error("GAS log error:", e?.message || e);
-      safeLog("GAS_ERROR", `[${APP_VERSION}] ` + (e?.message || String(e)));
+      safeLog("GAS_ERROR", e?.message || String(e));
     }
   });
 }
 
-// 主選單
+// ====== 主選單（客服改 callback 才能記錄點擊）======
 function mainMenu() {
   return new InlineKeyboard()
     .url("✅ 註冊帳戶", URL_REGISTER)
@@ -108,6 +112,7 @@ function mainMenu() {
     .text("👨‍💻 小編/客服", "menu_support");
 }
 
+// ====== 文案 ======
 function startIntroText() {
   return (
     `嗨～我是 F1 娛樂城官方代理 🤖\n\n` +
@@ -119,8 +124,7 @@ function startIntroText() {
     `② 加入「大師兄頻道」（會審核）\n` +
     `③ 點選「領取申請表單」→ 複製並填寫完成\n` +
     `④ 點選「小編/客服」→ 貼上表單送出申請\n\n` +
-    `✅ 完成以上步驟，即可申請 10 USDT 體驗金\n\n` +
-    `👇 請從下方選單選擇你需要的服務：\n\n` +
+    `👇 請從下方選單選擇你需要的服務：\n` +
     `（版本：${APP_VERSION}）`
   );
 }
@@ -137,6 +141,7 @@ function promoText() {
   );
 }
 
+// ✅ 新表單（含錢包綁定）
 function claimFormText() {
   return (
     `📝【領取申請表單】（請複製填寫後回傳小編）\n` +
@@ -155,56 +160,51 @@ function claimFormText() {
   );
 }
 
+// ✅ 啟動時先測一次 GAS（不影響 bot）
 async function testGAS() {
   try {
     console.log(`[${APP_VERSION}] Testing GAS connection...`);
-
     const payload = {
       secret: GAS_SECRET,
       now: nowStr(),
       tgId: "999999999",
       username: "@system_test",
       name: "SYSTEM TEST",
+      appVersion: APP_VERSION,
     };
-
     const res = await fetch(GAS_WEBAPP_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
     const txt = await res.text().catch(() => "");
     console.log(`[${APP_VERSION}] GAS TEST status:`, res.status);
     console.log(`[${APP_VERSION}] GAS TEST response:`, txt);
-
-    safeLog("GAS_TEST", `[${APP_VERSION}] status=${res.status} body=${txt}`);
+    safeLog("GAS_TEST", `status=${res.status} body=${txt}`);
   } catch (e) {
     console.error(`[${APP_VERSION}] GAS TEST failed:`, e?.message || e);
-    safeLog("GAS_TEST_FAIL", `[${APP_VERSION}] ` + (e?.message || String(e)));
+    safeLog("GAS_TEST_FAIL", e?.message || String(e));
   }
 }
 
 // /start
 bot.command("start", async (ctx) => {
-  safeLog("CMD_START", `[${APP_VERSION}] tgId=${ctx.from?.id || ""}`);
-
+  safeLog("CMD_START", `tgId=${ctx.from?.id || ""} v=${APP_VERSION}`);
   await upsertUserBasic(ctx);
   await ctx.reply(startIntroText(), { reply_markup: mainMenu() });
-
-  safeLog("REPLY_START", `[${APP_VERSION}] tgId=${ctx.from?.id || ""}`);
+  safeLog("REPLY_START", `tgId=${ctx.from?.id || ""} v=${APP_VERSION}`);
 });
 
 // 任何訊息都更新最後互動時間
 bot.on("message", async (ctx) => {
-  safeLog("MESSAGE", `[${APP_VERSION}] tgId=${ctx.from?.id || ""}`);
+  safeLog("MESSAGE", `tgId=${ctx.from?.id || ""} v=${APP_VERSION}`);
   await upsertUserBasic(ctx);
 });
 
 // 活動內容
 bot.callbackQuery("menu_promo", async (ctx) => {
   await ctx.answerCallbackQuery();
-  safeLog("CLICK_PROMO", `[${APP_VERSION}] tgId=${ctx.from?.id || ""}`);
-
+  safeLog("CLICK_PROMO", `tgId=${ctx.from?.id || ""} v=${APP_VERSION}`);
   await upsertUserBasic(ctx);
   await ctx.reply(promoText(), { reply_markup: mainMenu() });
 });
@@ -212,17 +212,15 @@ bot.callbackQuery("menu_promo", async (ctx) => {
 // 領取申請表單
 bot.callbackQuery("menu_claim_form", async (ctx) => {
   await ctx.answerCallbackQuery();
-  safeLog("CLICK_FORM", `[${APP_VERSION}] tgId=${ctx.from?.id || ""}`);
-
+  safeLog("CLICK_FORM", `tgId=${ctx.from?.id || ""} v=${APP_VERSION}`);
   await upsertUserBasic(ctx);
   await ctx.reply(claimFormText(), { reply_markup: mainMenu() });
 });
 
-// 小編/客服（記錄點擊）
+// ✅ 小編/客服：可記錄點擊，再給真正客服連結
 bot.callbackQuery("menu_support", async (ctx) => {
   await ctx.answerCallbackQuery();
-  safeLog("CLICK_SUPPORT", `[${APP_VERSION}] tgId=${ctx.from?.id || ""}`);
-
+  safeLog("CLICK_SUPPORT", `tgId=${ctx.from?.id || ""} v=${APP_VERSION}`);
   await upsertUserBasic(ctx);
 
   const kb = new InlineKeyboard().url("👨‍💻 前往小編/客服", URL_SUPPORT);
@@ -231,19 +229,16 @@ bot.callbackQuery("menu_support", async (ctx) => {
   });
 });
 
+// 重大錯誤捕捉
 bot.catch((err) => {
   console.error("BOT ERROR:", err);
-  safeLog("BOT_ERROR", `[${APP_VERSION}] ` + (err?.message || String(err)));
+  safeLog("BOT_ERROR", err?.message || String(err));
 });
 
-// 啟動流程
-safeLog("SYSTEM", `[${APP_VERSION}] Booting bot...`);
-console.log(`VERSION=${APP_VERSION}`);
-
+// 啟動
+safeLog("SYSTEM", `Booting bot... v=${APP_VERSION}`);
 await testGAS();
-
-safeLog("SYSTEM", `[${APP_VERSION}] Bot started`);
+safeLog("SYSTEM", `Bot started v=${APP_VERSION}`);
 
 bot.start();
 console.log("Bot is running...");
-
