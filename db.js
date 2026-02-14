@@ -1,20 +1,23 @@
-import Database from "better-sqlite3";
+import fs from "node:fs";
+import path from "node:path";
 
-const db = new Database("bot.db");
+const LOG_DIR = "logs";
+const LOG_FILE = path.join(LOG_DIR, "app.log");
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT,
-    action TEXT,
-    message TEXT
-  );
-`);
+function ensureDir() {
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+  } catch {}
+}
 
 export function insertLog(action, message) {
-  const stmt = db.prepare(`
-    INSERT INTO logs (timestamp, action, message)
-    VALUES (?, ?, ?)
-  `);
-  stmt.run(new Date().toISOString(), action, message);
+  ensureDir();
+  const line = `${new Date().toISOString()} | ${action} | ${String(message ?? "")}\n`;
+  try {
+    fs.appendFileSync(LOG_FILE, line, "utf8");
+  } catch (e) {
+    // 寫檔失敗也不要讓 bot 掛掉
+  }
+  // 同時印到 Railway logs（你看得到）
+  console.log(line.trimEnd());
 }
