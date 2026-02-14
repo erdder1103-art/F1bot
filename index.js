@@ -15,8 +15,8 @@ const bot = new Bot(BOT_TOKEN);
 // ====== 你的連結設定 ======
 const URL_REGISTER = "https://s.f1.top/r?p=h2pEYZ5DDuYq";
 const URL_CHANNEL = "https://t.me/livebigbrother1"; // 大師兄頻道
-const URL_GROUP = "https://t.me/livebigbrother";    // 大師兄群組
-const URL_SUPPORT = "https://t.me/F1top_bro";       // 小編/客服
+const URL_GROUP = "https://t.me/livebigbrother"; // 大師兄群組
+const URL_SUPPORT = "https://t.me/F1top_bro"; // 小編/客服
 
 // ✅ 固定用台北時間（不靠 dayjs）
 function nowStr() {
@@ -48,7 +48,7 @@ function safeLog(action, message) {
   }
 }
 
-// ✅ 只收集基本資訊：開始互動時間、最後互動時間、TGID、TG帳號、TG名稱
+// ✅ 上報（SQLite + GAS）：action 會一起送到 GAS
 async function upsertUserBasic(ctx, action = "USER_UPSERT") {
   return enqueueWrite(async () => {
     try {
@@ -64,10 +64,10 @@ async function upsertUserBasic(ctx, action = "USER_UPSERT") {
         tgId,
         username,
         name,
-        action, // ✅ 讓 GAS 也能知道使用者點了什麼
+        action,
       };
 
-      // SQLite 本地 log（穩定）
+      // SQLite 本地 log（最穩）
       safeLog(action, JSON.stringify(payload));
 
       const res = await fetch(GAS_WEBAPP_URL, {
@@ -79,7 +79,7 @@ async function upsertUserBasic(ctx, action = "USER_UPSERT") {
       if (!res.ok) {
         const t = await res.text().catch(() => "");
         console.error("GAS log failed:", res.status, t);
-        safeLog("GAS_FAIL", `status=${res.status} body=${t}`);
+        safeLog("GAS_FAIL", `action=${action} status=${res.status} body=${t}`);
       } else {
         safeLog("GAS_OK", `tgId=${tgId} action=${action}`);
       }
@@ -91,8 +91,7 @@ async function upsertUserBasic(ctx, action = "USER_UPSERT") {
 }
 
 // ====== 主選單 ======
-// ⚠️ 小編/客服 改成 callback，才能記錄「被點擊」
-// 點擊後由 bot 回傳一個「客服連結」讓使用者點
+// ⚠️ 小編/客服 一定要 callback 才能記錄「有點擊」
 function mainMenu() {
   return new InlineKeyboard()
     .url("✅ 註冊帳戶", URL_REGISTER)
@@ -108,7 +107,7 @@ function mainMenu() {
     .text("👨‍💻 小編/客服", "menu_support");
 }
 
-// ====== 文案（全部改回你的原本那份）======
+// ====== 文案（照你的原本內容，不亂改）======
 function startIntroText() {
   return (
     `嗨～我是 F1 娛樂城官方代理 🤖\n\n` +
@@ -153,7 +152,7 @@ function promoText() {
   );
 }
 
-// ✅ 只有這裡照你要求新增「錢包綁定」那題，其它不亂動
+// ✅ 只在這裡新增「錢包綁定」題目，其它不動
 function claimFormText() {
   return (
     `📝【領取申請表單】（請複製填寫後回傳小編）\n\n` +
@@ -183,14 +182,17 @@ async function testGAS() {
       name: "SYSTEM TEST",
       action: "GAS_TEST",
     };
+
     const res = await fetch(GAS_WEBAPP_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
     const txt = await res.text().catch(() => "");
     console.log("GAS TEST status:", res.status);
     console.log("GAS TEST response:", txt);
+
     safeLog("GAS_TEST", `status=${res.status} body=${txt}`);
   } catch (e) {
     console.error("GAS TEST failed:", e?.message || e);
@@ -201,12 +203,12 @@ async function testGAS() {
 // /start
 bot.command("start", async (ctx) => {
   await upsertUserBasic(ctx, "CMD_START");
+
   try {
     await ctx.reply(startIntroText(), { reply_markup: mainMenu() });
-    safeLog("REPLY_START", `tgId=${ctx.from?.id || ""}`);
   } catch (e) {
-    // 使用者封鎖 bot 會 403，這不用讓 bot 崩
-    safeLog("SEND_FAIL", e?.message || String(e));
+    // 403: bot was blocked by the user 等等，不要讓 bot 崩
+    safeLog("SEND_FAIL", e?.description || e?.message || String(e));
   }
 });
 
@@ -219,24 +221,46 @@ bot.on("message", async (ctx) => {
 bot.callbackQuery("menu_promo", async (ctx) => {
   await ctx.answerCallbackQuery().catch(() => {});
   await upsertUserBasic(ctx, "CLICK_PROMO");
-  await ctx.reply(promoText(), { reply_markup: mainMenu() });
+
+  try {
+    await ctx.reply(promoText(), { reply_markup: mainMenu() });
+  } catch (e) {
+    safeLog("SEND_FAIL", e?.description || e?.message || String(e));
+  }
 });
 
 // 領取申請表單
 bot.callbackQuery("menu_claim_form", async (ctx) => {
   await ctx.answerCallbackQuery().catch(() => {});
   await upsertUserBasic(ctx, "CLICK_FORM");
-  await ctx.reply(claimFormText(), { reply_markup: mainMenu() });
+
+  try {
+    await ctx.reply(claimFormText(), { reply_markup: mainMenu() });
+  } catch (e) {
+    safeLog("SEND_FAIL", e?.description || e?.message || String(e));
+  }
 });
 
-// ✅ 小編/客服（可以記錄「有沒有點過」）
+// ✅ 小編/客服（只要按到這顆，就一定紀錄到 CLICK_SUPPORT）
 bot.callbackQuery("menu_support", async (ctx) => {
   await ctx.answerCallbackQuery().catch(() => {});
+
+  // 先本地落一筆：保證「有按」一定存在
+  try {
+    safeLog("CLICK_SUPPORT", `tgId=${String(ctx.from?.id ?? "")} now=${nowStr()}`);
+  } catch {}
+
+  // 再送 GAS（action=CLICK_SUPPORT）
   await upsertUserBasic(ctx, "CLICK_SUPPORT");
 
-  // 回傳一個可點的客服連結（你能記錄 callback 點擊，但 url 點擊 TG 不會回傳）
+  // 回傳一個可點的客服連結（注意：點 URL Telegram 不會再回傳事件，這是 TG 限制）
   const kb = new InlineKeyboard().url("👨‍💻 前往小編/客服", URL_SUPPORT);
-  await ctx.reply("已為你打開客服入口，請點下面按鈕聯繫小編 👇", { reply_markup: kb });
+
+  try {
+    await ctx.reply("已為你打開客服入口，請點下面按鈕聯繫小編 👇", { reply_markup: kb });
+  } catch (e) {
+    safeLog("SEND_FAIL", e?.description || e?.message || String(e));
+  }
 });
 
 // 重大錯誤捕捉
