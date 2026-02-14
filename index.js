@@ -1,5 +1,7 @@
 import { Bot, InlineKeyboard } from "grammy";
 import { insertLog } from "./db.js";
+console.log("=== BOOT FILE index.js ===", new Date().toISOString());
+console.log("=== APP_VERSION ===", APP_VERSION);
 
 // ====== 版本號（你每次要排查就改這行）======
 const APP_VERSION = "2026-02-14-v3";
@@ -244,3 +246,4 @@ safeLog("SYSTEM", `[${APP_VERSION}] Bot started`);
 
 bot.start();
 console.log("Bot is running...");
+
