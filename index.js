@@ -13,7 +13,7 @@ if (!GAS_SECRET) throw new Error("Missing GAS_SECRET");
 const bot = new Bot(BOT_TOKEN);
 
 // ====== 你的链接设置 ======
-const URL_REGISTER = "https://s.f1.top/r?p=h2pEYZ5DDuYq";
+const URL_REGISTER = "https://t.me/F1TopBot?start=48387";
 const URL_CHANNEL = "https://t.me/livebigbrother1"; // 大师兄频道
 const URL_GROUP = "https://t.me/livebigbrother"; // 大师兄群组
 const URL_SUPPORT = "https://t.me/F1top_bro"; // 大师兄小编
@@ -284,4 +284,5 @@ safeLog("SYSTEM", "Bot started");
 
 bot.start();
 console.log("Bot is running...");
+
 
