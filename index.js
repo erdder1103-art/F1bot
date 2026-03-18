@@ -13,7 +13,7 @@ if (!GAS_SECRET) throw new Error("Missing GAS_SECRET");
 const bot = new Bot(BOT_TOKEN);
 
 // ====== 你的链接设置 ======
-const URL_REGISTER = "https://t.me/F1TopBot?start=48387";
+const URL_REGISTER = "https://s.f1.top/i?p=FDEhlLgLmMge";
 const URL_CHANNEL = "https://t.me/livebigbrother1"; // 大师兄频道
 const URL_GROUP = "https://t.me/livebigbrother"; // 大师兄群组
 const URL_SUPPORT = "https://t.me/F1top_bro"; // 大师兄小编
@@ -98,7 +98,7 @@ function mainMenu() {
     .row()
     .url("📣 大师兄频道", URL_CHANNEL)
     .row()
-    .url("👥 大师兄群组", URL_GROUP)
+    .url("👥 无法发消息给小编-请进群等待小编联系", URL_GROUP)
     .row()
     .text("🎁 活动内容", "menu_promo")
     .row()
@@ -144,8 +144,8 @@ function promoText() {
     `🎁【大师兄专属活动】🎁\n\n` +
     `🔥 首次充值优惠\n` +
     `━━━━━━━━━━━━━━\n` +
-    `✔ 充值送彩金：30% ～ 50%\n` +
-    `✔ 流水要求：5 ～ 7 倍\n` +
+    `✔ 充值送彩金：50% ～ 100%\n` +
+    `✔ 流水要求：3 ～ 5 倍\n` +
     `📩 想了解适合你的方案，请直接点「大师兄小编」\n\n` +
     `💰 每日投注奖励（连续 7 天有效）\n` +
     `━━━━━━━━━━━━━━\n` +
